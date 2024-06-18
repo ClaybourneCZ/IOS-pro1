@@ -1,0 +1,592 @@
+#!/bin/sh
+# xchadi09 Václav Chadim
+# FIT BUT
+# 19.03.2023
+
+export POSIXLY_CORRECT=yes
+export LC_ALL=C
+
+
+#MOLE_RC ---- export MOLE_RC=$HOME/IOSpro1/molerc
+#chmod +x ./mole
+
+
+#PROMENNE pro pozdejsi pouziti
+hd2=0
+
+#FUNKCE 
+
+#zapis bez groupy
+log_no_g () 
+{
+    UPRAVCEST=$(echo "$1" | awk -F'/' ' { print $NF } ')
+    echo "$(cd "$(dirname "$1")" && pwd) $1 $UPRAVCEST $(date +%F_%H-%M-%S)" >> "$MOLE_RC"
+}
+
+#zapis s groupou
+log_g () 
+{
+    UPRAVCEST=$(echo "$2" | awk -F'/' ' { print $NF } ') 
+    echo "$(cd "$(dirname "$2")" && pwd) $2 $UPRAVCEST $(date +%F_%H-%M-%S) $1" >> "$MOLE_RC"
+}
+
+#kontrola zda jsou nejake editory nastaveny EDITOR,VISUAL var is set
+edit ()
+{
+    if [ -n "${EDITOR+x}" ]; then
+        EDITOR "$1"
+        exit 0
+    elif [ -n "${VISUAL+x}" ]; then
+        VISUAL "$1"
+        exit 0
+    else
+        vi "$1"
+        exit 0
+    fi
+}
+
+#tiskne chybu 
+error_print ()
+{
+    if [ "$1" = "" ]; then
+        echo "error: Nenalezen soubor, spatny dir nebo nic neodpovida filters..." >&2
+        exit 1
+    fi
+}
+
+#kontrola zda je nastavena promena MOLE_RC
+if [ -z "${MOLE_RC+x}" ]; then 
+    echo "error: Neni nastavena promena: MOLE_RC" >&2
+    exit 1
+fi
+
+
+#pouze jeden arg tedy -> -f ci -d
+if [ "$#" -eq 1 ]; then
+    if [ -f "$1" ]; then
+        error_print "$1"
+        log_no_g "$1"
+        edit "$1"
+    fi
+    
+    if [ -d "$1" ]; then
+        REALPA=$(realpath "$1")
+        GSGROUPOUADIR=$(cat < "$MOLE_RC" | awk -v dir="$REALPA" '{if ($1 == dir) print $2}' | tail -n 1)
+        error_print "$GSGROUPOUADIR"
+        log_no_g "$GSGROUPOUADIR"
+        edit "$GSGROUPOUADIR"
+    fi
+fi
+
+#zadny arg, tedy vezmeme momentalni pwd a posledni file
+if [ "$#" -eq 0 ]; then
+    curent_dir=$(pwd)
+    LASTFILE=$(cat < "$MOLE_RC" | awk -v curedir="$curent_dir" '{if ($1 == curedir) print $2}' | tail -n 1)
+    error_print "$LASTFILE"
+    log_no_g "$LASTFILE"
+    edit "$LASTFILE" 
+fi
+
+if [ "$1" = "list" ]; then
+    shift 
+    LISTUJI=1
+
+    for LASTARGD in "$@"; do
+    : 
+    done
+
+    if [ -d "$LASTARGD" ]; then
+    HLEDAMDIR="$LASTARGD"
+    fi
+
+fi
+
+if [ "$1" = "secret-log" ]; then
+    shift
+    SECRET=1
+
+    for LASTARGD in "$@"; do
+    : 
+    done
+            
+    if [ -d "$LASTARGD" ]; then
+    HLEDAMDIR="$LASTARGD"
+    fi
+fi
+
+for LASTARGD in "$@"; do
+: 
+done
+            
+if [ -d "$LASTARGD" ]; then
+
+HLEDAMDIR="$LASTARGD"
+
+fi
+
+
+while getopts ":hgmab" opt; do
+    case $opt in 
+        h)
+        #MANUALOY VYPIS
+            echo "Nápověda k použití"
+            echo ""
+            echo ""
+            echo "mole -h"
+            echo ""
+            echo "Vypíše nápovědu k použití skriptu"
+            echo ""
+            echo ""
+
+            echo "mole [-g GROUP] FILE"
+            echo ""
+            echo "Otevře danný soubor, pokud byl zadán přepínač -g dané otevření souboru bude zároveň přiřazeno do skupiny s názvem GROUP. GROUP může být název jak existující, tak nové skupiny."
+            echo ""
+            echo ""
+
+            echo "mole [-m] [FILTERS] [DIRECTORY]"
+            echo ""
+            echo "Pokud DIRECTORY odpovídá existujícímu adresáři, skript z daného adresáře vybere soubor, který má být otevřen. Pokud nebyl zadán adresář, předpokládá se aktuální adresář. Pokud bylo v daném adresáři editováno skriptem více souborů, vybere se soubor, který byl pomocí skriptu otevřen (editován) jako poslední."
+            echo "Pokud byl zadán argument -m, tak skript vybere soubor, který byl pomocí skriptu otevřen (editován) nejčastěji. Pokud bude při použití přepínače -m nalezeno více souborů se stejným maximálním počtem otevření, může mole vybere si jeden z nich."
+            echo "Výběr souboru může být dále ovlivněn zadanými filtry FILTERS."
+            echo ""
+            echo ""
+
+
+            echo "list [FILTERS] [DIRECTORY] "
+            echo ""
+            echo "Zobrazí seznam souborů, které byly v daném adresáři otevřeny (editovány) pomocí skriptu. Pokud nebyl zadán adresář, předpokládá se aktuální adresář. Seznam souborů může být filtrován pomocí FILTERS."
+            echo "Výběr souboru může být dále ovlivněn zadanými filtry FILTERS."
+            echo "Pokud nebyl zadán adresář, předpokládá se aktuální adresář."
+
+
+
+        ;;
+
+        g)
+        #GROUPY
+            #pokud je posledni arg soubor tak ho zapisu a edituji
+            
+            shift $((OPTIND-1))
+            GROUPS="$1"
+            for LASTARG in "$@"; do
+                : 
+            done
+            
+            if [ -f "$LASTARG" ]; then
+            log_g "$GROUPS"  "$LASTARG"
+            edit "$LASTARG"
+            
+            #groupy bez souboru, pouze si ulozim nektera data z arg
+            else
+                POS=1
+                for LASTARG1 in "$@"; do
+                : 
+                done
+                REALPA=$(realpath "$LASTARG1")
+                if [ -d "$REALPA" ]; then
+                    HLEDAMDIR="$REALPA"
+                fi
+                HLEDANAGROUPA=$1
+                shift
+            fi
+        ;;
+
+        m)
+        #MOST EDITED FILE
+            
+            #pouze -m 
+            if [ 1 = "$#" ]; then
+                curent_dir=$(pwd)
+                MOSTUSED=$(cat < "$MOLE_RC" | awk -v curedir="$curent_dir" '{if ($1 == curedir) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}' )
+                error_print "$MOSTUSED"
+                log_no_g "$MOSTUSED"
+                edit "$MOSTUSED"
+            fi                                                                                 
+
+
+            #hned jakmile -m, tak pokud je dir posledni argument tak si ho ulozim
+            for LASTARG1 in "$@"; do
+            : 
+            done
+            REALPA=$(realpath "$LASTARG1")
+            if [ -d "$REALPA" ]; then
+                HLEDAMDIR="$REALPA"
+            fi
+
+            #pro hledani nejcasteji oteviraneho souboru
+            # -m [filters]
+            if [ "$2" = "-g" ] || [ "$2" = "-b" ] || [ "$2" = "-a" ]; then
+                NEJCASTEJI=1
+            fi
+            
+            # -m [dir]
+            if [ "$#" -eq 2 ]; then
+                CURDIR=$(realpath "$2")
+                MOSTUSED=$(cat < "$MOLE_RC" | awk -v curedir="$CURDIR" '{if ($1 == curedir) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}' )
+                error_print "$MOSTUSED"
+                log_no_g "$MOSTUSED"
+                edit "$MOSTUSED"                                                                                                     
+            fi
+        ;;
+
+        a)
+        #after
+        #ulozeni dat -a
+        POS=1
+        shift $((OPTIND-1))
+        for LASTARG1 in "$@"; do
+        : 
+        done
+        REALPA=$(realpath "$LASTARG1")
+        if [ -d "$REALPA" ]; then
+            HLEDAMDIR="$REALPA"
+        fi
+        DATUM1="$1"
+        shift
+        ;;
+        
+        b)
+        #before
+        #ulozeni dat -b
+        POS=1
+        shift $((OPTIND-1))
+        for LASTARG1 in "$@"; do
+        : 
+        done
+        REALPA=$(realpath "$LASTARG1")
+        if [ -d "$REALPA" ]; then
+            HLEDAMDIR="$REALPA"
+        fi
+        DATUM2="$1"
+        NEXTDATUM2=$(date -d "$DATUM2 + 1 day" +"%F")
+        hd2=1
+        shift 
+        ;;
+
+        ?)
+        #chyba???
+        ;;
+    esac
+done
+
+
+
+
+
+if [ "$NEJCASTEJI" = 1 ]; then
+
+    if [ "$HLEDAMDIR" = "" ]; then
+        HLEDAMDIR=$(pwd)
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+
+            if [ "$hd2" = 0 ]; then
+
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+
+            elif [ "$hd2" = 1 ]; then
+
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+ 
+            fi
+
+        else
+
+            if [ "$hd2" = 0 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+
+            elif [ "$hd2" = 1 ]; then
+ 
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+            fi
+        fi
+
+    else
+
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+
+            if [ "$hd2" = 0 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+
+
+            elif [ "$hd2" = 1 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+ 
+            fi
+
+        else
+
+            if [ "$hd2" = 0 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+
+            elif [ "$hd2" = 1 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | sort | uniq -c | sort -nr | awk '{print $2; exit}')
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+            fi
+        fi
+
+    fi
+
+
+
+elif [ "$LISTUJI" = 1 ];then
+
+
+    if [ "$HLEDAMDIR" = "" ]; then
+        HLEDAMDIR=$(pwd)
+
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+
+            if [ "$hd2" = 0 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                error_print "$VYPIS"
+                echo "$VYPIS"
+            
+            elif [ "$hd2" = 1 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if ($4 <= filt1) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g')
+                error_print "$VYPIS"
+                echo "$VYPIS"
+ 
+            fi
+
+        else
+
+            if [ "$hd2" = 0 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($5 == g) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                    error_print "$VYPIS"
+                    echo "$VYPIS"
+
+                done
+
+            elif [ "$hd2" = 1 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                    error_print "$VYPIS"
+                    echo "$VYPIS"
+                done
+            fi
+        fi
+
+    else
+
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+
+            if [ "$hd2" = 0 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                error_print "$VYPIS"
+                echo "$VYPIS"
+                
+            elif [ "$hd2" = 1 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                error_print "$VYPIS"
+                echo "$VYPIS"
+
+            fi
+
+        else
+
+            if [ "$hd2" = 0 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($$5 == g) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                    error_print "$VYPIS"
+                    echo "$VYPIS"
+                done
+
+            elif [ "$hd2" = 1 ]; then
+
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $0}' | awk '{print $3" "$5}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /,/g' -e 's/,/ /1'  | sed -e 's/,,/,/g 1' | sed -e 's/,$//g' | awk '{print $1": "$2}' | column -t | sort | sed -e 's/,$//g' )
+                    error_print "$VYPIS"
+                    echo "$VYPIS"
+                done
+            fi
+        fi
+
+    fi
+
+
+elif [ "$SECRET" = 1 ]; then
+ 
+    if [ "$HLEDAMDIR" = "" ]; then
+    
+        if [ "$hd2" = 0 ]; then
+
+            SLOG=$(cat < "$MOLE_RC" | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk '{print $1$3" "$4}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /;/g' ) 
+            echo "$SLOG" > "/home/$USER/.mole/log_${USER}_$(date +%F_%H-%M-%S).bz2"
+
+        elif [ "$hd2" = 1 ]; then
+            SLOG=$(cat < "$MOLE_RC" | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk '{print $1$3" "$4}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /;/g' )
+            echo "$SLOG" > "/home/$USER/.mole/log_${USER}_$(date +%F_%H-%M-%S).bz2"
+        fi
+
+    else
+
+        if [ "$hd2" = 0 ]; then
+            SLOG=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk '{print $1$3" "$4}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /;/g' )
+            echo "$SLOG" > "/home/$USER/.mole/log_${USER}_$(date +%F_%H-%M-%S).bz2"
+        elif [ "$hd2" = 1 ]; then
+            SLOG=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk '{print $1$3" "$4}' | awk '{a[$1]=a[$1] FS $2} END{for(i in a) print i a[i]}' | awk -v c=2 'BEGIN{FS=OFS=" "} {for(i=NF+1; i<=c; i++) $i="-"} 1' | sed -e 's/ /;/g' )
+            echo "$SLOG" > "/home/$USER/.mole/log_${USER}_$(date +%F_%H-%M-%S).bz2"
+        fi
+        
+    fi
+
+
+
+elif [ "$POS" = 1 ] && [ "$NEJCASTEJI" = "" ]; then
+
+
+    if [ "$HLEDAMDIR" = "" ]; then
+        HLEDAMDIR=$(pwd)
+
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+
+            if [ "$hd2" = 0 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $2}' | tail -n 1)
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+
+            elif [ "$hd2" = 1 ]; then
+
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $2}' | tail -n 1)
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+ 
+            fi
+
+        else
+            if [ "$hd2" = 0 ]; then
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | tail -n 1)
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+
+            elif [ "$hd2" = 1 ]; then
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | tail -n 1)
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+            fi
+        fi
+
+    else
+    
+        if [ "$HLEDANAGROUPA" = "" ]; then
+            if [ "$hd2" = 0 ]; then
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $2}' | tail -n 1)
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+            elif [ "$hd2" = 1 ]; then
+                VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $2}' | tail -n 1)
+                error_print "$VYPIS"
+                log_no_g "$VYPIS"
+                edit "$VYPIS"
+ 
+            fi
+
+        else
+            if [ "$hd2" = 0 ]; then
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | tail -n 1)
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+
+            elif [ "$hd2" = 1 ]; then
+                GROUPSSORTED=$(echo "$HLEDANAGROUPA" | tr "," "\n" )
+                for grou in $GROUPSSORTED
+                do
+                    VYPIS=$(cat < "$MOLE_RC" | awk -v dir="$HLEDAMDIR" '{if ($1 == dir) print $0}' | awk -v filt="$DATUM1" '{if (FNR>0 && $4 > filt) print $0}' | awk -v filt1="$NEXTDATUM2" '{if (FNR>0 && $4 < filt1) print $0}' | awk -v g="$grou" '{if ($5 == g) print $2}' | tail -n 1)
+                    error_print "$VYPIS"
+                    log_no_g "$VYPIS"
+                    edit "$VYPIS"
+                done
+            fi
+        fi
+
+    fi
+
+
+fi
